@@ -2,13 +2,15 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from slowapi.errors import RateLimitExceeded
 from prometheus_client import Counter, Histogram
@@ -100,6 +102,10 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allo
 app.include_router(router, prefix="/api/v1")
 app.include_router(enterprise_router, prefix="/api/v1")
 
+DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
+if (DIST_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="frontend-assets")
+
 
 @app.get("/health", tags=["infra"], include_in_schema=True)
 def health():
@@ -116,3 +122,21 @@ def health():
 def metrics():
     from fastapi.responses import Response
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_react(full_path: str):
+    if full_path == "api" or full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Rota da API nao encontrada"}})
+
+    dist_dir = DIST_DIR.resolve()
+    requested_path = (dist_dir / full_path).resolve()
+    if requested_path.is_relative_to(dist_dir) and requested_path.is_file():
+        return FileResponse(requested_path)
+    if Path(full_path).suffix:
+        return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Arquivo nao encontrado"}})
+
+    index_file = dist_dir / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    return JSONResponse(status_code=404, content={"error": {"code": "frontend_not_built", "message": "Build do frontend nao encontrado"}})

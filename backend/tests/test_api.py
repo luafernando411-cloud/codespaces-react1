@@ -157,3 +157,16 @@ def test_monitoring_websocket_requires_and_accepts_access_token(client):
         assert message["type"] == "connection"
         assert message["status"] == "live"
         assert message["channel"] == "saude"
+
+
+def test_react_fallback_serves_spa_but_not_unknown_api(client, monkeypatch, tmp_path):
+    import app.main as main_module
+
+    (tmp_path / "index.html").write_text("<main>React SPA</main>", encoding="utf-8")
+    monkeypatch.setattr(main_module, "DIST_DIR", tmp_path)
+
+    assert client.get("/").text == "<main>React SPA</main>"
+    assert client.get("/segurados/novo").text == "<main>React SPA</main>"
+    missing_api = client.get("/api/v1/rota-inexistente")
+    assert missing_api.status_code == 404
+    assert missing_api.json()["error"]["code"] == "not_found"

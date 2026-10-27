@@ -4,13 +4,15 @@ services:
     runtime: python
     plan: starter
     region: ohio
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && npm ci && npm run build
     preDeployCommand: PYTHONPATH=backend alembic -c backend/alembic.ini upgrade head && PYTHONPATH=backend python -m app.seed
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.1
+      - key: NODE_VERSION
+        value: 22.15.0
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
