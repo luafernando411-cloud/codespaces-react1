@@ -170,6 +170,36 @@ class ReportRequest(BaseModel):
     group_by: str | None = None
 
 
+class ParameterUpdate(BaseModel):
+    value: Any
+    reason: str = Field(min_length=8, max_length=500)
+
+
+class ApprovalReview(BaseModel):
+    decision: Literal["aprovado", "rejeitado"]
+    reason: str = Field(min_length=8, max_length=500)
+
+
+class AlertRuleCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    metric: str = Field(min_length=2, max_length=100)
+    operator: Literal["gt", "gte", "lt", "lte"]
+    threshold: Decimal
+    severity: Literal["info", "warning", "critical"] = "warning"
+    window_seconds: int = Field(default=60, ge=10, le=86400)
+
+
+class MetricSample(BaseModel):
+    series: str = Field(min_length=2, max_length=100)
+    value: Decimal
+    labels: dict[str, Any] = Field(default_factory=dict)
+    recorded_at: datetime | None = None
+
+
+class DashboardLayoutUpdate(BaseModel):
+    layout: list[dict[str, Any]] = Field(max_length=40)
+
+
 class Page(BaseModel):
     items: list[Any]
     total: int

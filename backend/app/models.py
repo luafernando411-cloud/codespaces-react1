@@ -289,6 +289,22 @@ class SystemParameterVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class ParameterApproval(Base):
+    __tablename__ = "aprovacoes"
+    __table_args__ = (Index("ix_aprovacoes_status_created", "status", "created_at"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    resource_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    resource_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    requested_value: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    requester_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False, index=True)
+    reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    status: Mapped[str] = mapped_column(String(20), default="pendente", nullable=False, index=True)
+    review_reason: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class BusinessEvent(Base):
     __tablename__ = "eventos_negocio"
     __table_args__ = (Index("ix_eventos_negocio_data_tipo", "occurred_at", "event_type"), Index("ix_eventos_negocio_entidade", "entity_type", "entity_id"))

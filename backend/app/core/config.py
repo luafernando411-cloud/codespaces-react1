@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "Aurora Previdencia API"
     environment: str = "development"
     database_url: str = "sqlite:///./aurora.db"
+    redis_url: str = ""
     jwt_secret_key: str = "development-only-change-me-32-characters"
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
