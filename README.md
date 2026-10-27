@@ -27,44 +27,119 @@ You may also see any lint errors in the console.
 Launches the test runner in the interactive watch mode.\
 See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `npm run build`
+# Aurora Previdencia Municipal
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Base inicial de um sistema de cadastramento previdenciario, com frontend React/Vite e API FastAPI. PostgreSQL e o alvo do compose; SQLite e suportado para desenvolvimento e testes. O painel atual usa dados demonstrativos e ainda nao consome a API.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Arquitetura
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```text
+.
+├── backend/app/             # API, configuracao, modelos, schemas, services e repositories
+├── backend/migrations/      # Alembic e revisoes versionadas
+├── backend/tests/           # testes pytest/httpx
+├── src/                     # aplicacao React/Vite
+├── docker-compose.yml       # API, frontend e PostgreSQL
+├── Dockerfile.frontend
+└── requirements.txt
+```
 
-## Learn More
+A API segue `routers (app/api.py) -> services -> repositories -> models/schemas`; as rotas estao em `/api/v1` e o OpenAPI em `/docs`. Dados de segurados e logs ficam em tabelas distintas, CPF e validado e mascarado nas listagens/relatorios. Campos bancarios possuem utilidade de cifragem Fernet; a chave deve ser criada e protegida fora do banco.
 
-You can learn more in the [Vite documentation](https://vitejs.dev/guide/).
+## DER
 
-To learn Vitest, a Vite-native testing framework, go to [Vitest documentation](https://vitest.dev/guide/)
+```mermaid
+erDiagram
+		USUARIOS ||--o{ USUARIOS_PERFIS : possui
+		PERFIS ||--o{ USUARIOS_PERFIS : concede
+		PERFIS ||--o{ PERFIS_PERMISSOES : inclui
+		PERMISSOES ||--o{ PERFIS_PERMISSOES : define
+		PESSOAS ||--o| SEGURADOS : identifica
+		PESSOAS ||--o| ENDERECOS : reside
+		PESSOAS ||--o{ CONTATOS : comunica
+		PESSOAS ||--o| DADOS_BANCARIOS : recebe
+		SEGURADOS ||--o| SERVIDORES_ATIVOS : detalha
+		SEGURADOS ||--o| APOSENTADOS : detalha
+		SEGURADOS ||--o| PENSIONISTAS : detalha
+		ORGAOS_LOTACOES ||--o{ SERVIDORES_ATIVOS : lota
+		CARGOS ||--o{ SERVIDORES_ATIVOS : ocupa
+		SEGURADOS ||--o{ DEPENDENTES_BENEFICIARIOS : vincula
+		PESSOAS ||--o{ DEPENDENTES_BENEFICIARIOS : representa
+		SEGURADOS ||--o{ DOCUMENTOS : possui
+		TIPOS_DOCUMENTO ||--o{ DOCUMENTOS : classifica
+		CAMPANHAS_RECENSEAMENTO ||--o{ RECENSEAMENTOS : organiza
+		SEGURADOS ||--o{ RECENSEAMENTOS : participa
+		USUARIOS ||--o{ LOGS_ACESSO : acessa
+		USUARIOS ||--o{ LOGS_AUDITORIA : altera
+		USUARIOS ||--o{ RELATORIOS_GERADOS : solicita
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Cadastros mutaveis usam `created_at`, `updated_at`, `deleted_at` e `created_by`; logs sao append-only. A revisao `backend/migrations/versions/a3ee36c49c77_initial_relational_schema.py` cria tabelas, indices e constraints. O seed e repetivel.
 
-### Code Splitting
+## Entrega por etapa
 
-This section has moved here: [https://sambitsahoo.com/blog/vite-code-splitting-that-works.html](https://sambitsahoo.com/blog/vite-code-splitting-that-works.html)
+1. **Arquitetura:** monorepo React/FastAPI e separacao em API, services, repositories, modelos, schemas e migracoes. Falta extrair cada dominio em routers proprios. Validacao: consulte `/docs` e `backend/app`.
+2. **DER/persistencia:** entidades para usuarios/perfis/permissoes, pessoas, vinculos, documentos, recenseamento, auditoria, acessos e relatorios; revisao Alembic inicial. Falta testar PostgreSQL e ligar schemas/endpoints de enderecos, contatos e dados bancarios. Validacao: `PYTHONPATH=backend alembic -c backend/alembic.ini upgrade head`.
+3. **API:** JWT access/refresh com rotacao, Argon2, rate limit, bloqueio apos cinco falhas, RBAC, cadastro dos tres vinculos, soft delete, upload validado, analise documental, campanhas, recenseamentos, dashboards e sete tipos de relatorio CSV/XLSX/PDF. Faltam recuperacao de senha via provedor, edicao/historico completos, dependentes/endereco/contato/banco, self-service, lista de nao recenseados e exportacao pesada em background. Upload local deve ser trocado por bucket privado com antivirus e retencao em producao. Validacao: `PYTHONPATH=backend pytest -q backend/tests`.
+4. **Frontend:** painel responsivo, navegacao por modulos, indicadores, atividade e aviso explicito de demonstracao. Falta login, rotas protegidas React Router, contexto, Axios com refresh, TanStack Query ligado a API, CRUDs e graficos reais. A navegacao atual nao substitui esses fluxos. Validacao: `npm test -- --run` e `npm run build`.
+5. **Infra/testes:** compose com API, frontend, PostgreSQL, `.env.example`, seed de perfis/tipos/admin e testes basicos. Falta cobertura de 70%, lint/format automaticos, CI e auditoria de seguranca das imagens. A base nao satisfaz ainda os criterios de producao. Validacao: veja os comandos abaixo.
 
-### Analyzing the Bundle Size
+## Executar
 
-This section has moved here: [https://github.com/btd/rollup-plugin-visualizer#rollup-plugin-visualizer](https://github.com/btd/rollup-plugin-visualizer#rollup-plugin-visualizer)
+Requisitos: Python 3.11+, Node 22+, npm e Docker Compose v2.
 
-### Making a Progressive Web App
+```bash
+cp .env.example .env
+```
 
-This section has moved here: [https://dev.to/hamdankhan364/simplifying-progressive-web-app-pwa-development-with-vite-a-beginners-guide-38cf](https://dev.to/hamdankhan364/simplifying-progressive-web-app-pwa-development-with-vite-a-beginners-guide-38cf)
+Troque `POSTGRES_PASSWORD`, `JWT_SECRET_KEY` e `ADMIN_PASSWORD` antes de qualquer uso externo. Gere uma chave Fernet com `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` e coloque em `BANK_ENCRYPTION_KEY`.
 
-### Advanced Configuration
+```bash
+docker compose up --build
+```
 
-This section has moved here: [https://vitejs.dev/guide/build.html#advanced-base-options](https://vitejs.dev/guide/build.html#advanced-base-options)
+Frontend: `http://localhost:3000`  
+API: `http://localhost:8000`  
+OpenAPI: `http://localhost:8000/docs`  
+Health: `http://localhost:8000/health`
 
-### Deployment
+Seed inicial: CPF `52998224725`, email `admin@example.local`, senha `ChangeMe!2026` (ou os valores configurados por `ADMIN_CPF`, `ADMIN_EMAIL` e `ADMIN_PASSWORD`). Troque as credenciais imediatamente. Senhas exigem 12 caracteres, maiuscula, minuscula, numero e simbolo.
 
-This section has moved here: [https://vitejs.dev/guide/build.html](https://vitejs.dev/guide/build.html)
+### API local com SQLite
 
-### Troubleshooting
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+export PYTHONPATH=backend DATABASE_URL=sqlite:///./aurora.db
+export JWT_SECRET_KEY=local-dev-secret-with-at-least-32-characters
+export ADMIN_CPF=52998224725 ADMIN_PASSWORD='ChangeMe!2026'
+alembic -c backend/alembic.ini upgrade head
+python -m app.seed
+uvicorn app.main:app --reload --port 8000
+```
 
-This section has moved here: [https://vitejs.dev/guide/troubleshooting.html](https://vitejs.dev/guide/troubleshooting.html)
+### Chamadas de exemplo
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+	-H 'Content-Type: application/json' \
+	-d '{"cpf":"52998224725","password":"ChangeMe!2026"}'
+
+curl 'http://localhost:8000/api/v1/segurados?page=1&page_size=20' \
+	-H 'Authorization: Bearer ACCESS_TOKEN'
+
+curl -X POST http://localhost:8000/api/v1/relatorios \
+	-H 'Authorization: Bearer ACCESS_TOKEN' -H 'Content-Type: application/json' \
+	-d '{"type":"segurados_por_vinculo","format":"csv","filters":{}}' -o segurados.csv
+```
+
+### Testes
+
+```bash
+npm test -- --run
+npm run build
+PYTHONPATH=backend pytest -q backend/tests
+```
+
+A cobertura ainda e inicial, abaixo do minimo solicitado. Nao use dados, credenciais ou armazenamento de demonstracao para tratar dados pessoais reais sem completar revisao de seguranca, LGPD, retencao, backups e controles de acesso.
