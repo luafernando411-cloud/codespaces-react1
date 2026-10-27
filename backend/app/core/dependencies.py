@@ -40,4 +40,5 @@ def require_roles(*roles: str) -> Callable:
 operator_or_admin = require_roles("administrador", "operador")
 auditor_or_admin = require_roles("administrador", "auditor")
 admin_only = require_roles("administrador")
+super_admin_only = require_roles("super_administrador")
 any_staff = require_roles("administrador", "operador", "auditor")

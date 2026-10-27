@@ -41,16 +41,17 @@ def client(monkeypatch):
     monkeypatch.setattr(main_module, "engine", engine)
     with TestingSession() as session:
         admin_profile = Profile(name="Administrador", code="administrador")
+        super_admin_profile = Profile(name="Super Administrador", code="super_administrador")
         operator_profile = Profile(name="Operador", code="operador")
         auditor_profile = Profile(name="Auditor", code="auditor")
-        session.add_all([admin_profile, operator_profile, auditor_profile])
+        session.add_all([admin_profile, super_admin_profile, operator_profile, auditor_profile])
         session.flush()
         admin = User(cpf="52998224725", email="admin@example.test", full_name="Admin Teste", password_hash=hash_password("ChangeMe!2026"))
         operator = User(cpf="11144477735", email="operador@example.test", full_name="Operador Teste", password_hash=hash_password("ChangeMe!2026"))
         auditor = User(cpf="93541134780", email="auditor@example.test", full_name="Auditor Teste", password_hash=hash_password("ChangeMe!2026"))
         session.add_all([admin, operator, auditor])
         session.flush()
-        session.add_all([UserProfile(user_id=admin.id, profile_id=admin_profile.id), UserProfile(user_id=operator.id, profile_id=operator_profile.id), UserProfile(user_id=auditor.id, profile_id=auditor_profile.id)])
+        session.add_all([UserProfile(user_id=admin.id, profile_id=admin_profile.id), UserProfile(user_id=admin.id, profile_id=super_admin_profile.id), UserProfile(user_id=operator.id, profile_id=operator_profile.id), UserProfile(user_id=auditor.id, profile_id=auditor_profile.id)])
         session.commit()
     with TestClient(app, client=(f"test-{uuid4().hex}", 50000)) as test_client:
         yield test_client
@@ -70,7 +71,7 @@ def test_health_and_login(client):
     token = access_token(client)
     profile = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert profile.status_code == 200
-    assert profile.json()["profiles"] == ["administrador"]
+    assert set(profile.json()["profiles"]) == {"administrador", "super_administrador"}
 
 
 def test_login_blocks_after_five_failures(client):
@@ -112,3 +113,47 @@ def test_dashboard_returns_database_aggregates(client):
     assert response.json()["segurados_total"] == 0
     assert len(response.json()["cadastros_por_mes"]) == 6
     assert response.json()["recentes"] == []
+
+
+def test_enterprise_parameters_approvals_alerts_and_integrity(client):
+    token = access_token(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    seeded = client.post("/api/v1/configuracoes/parametros/seed", headers=headers)
+    assert seeded.status_code == 200
+    assert seeded.json()["inserted"] == 8
+
+    update = client.put("/api/v1/configuracoes/parametros/documents.review_sla_days", json={"value": 7, "reason": "Ajuste do SLA documental"}, headers=headers)
+    assert update.status_code == 200
+    assert update.json()["version"] == 2
+    history = client.get("/api/v1/configuracoes/parametros/documents.review_sla_days/historico", headers=headers)
+    assert [version["version"] for version in history.json()] == [2, 1]
+
+    sensitive = client.put("/api/v1/configuracoes/parametros/security.session_minutes", json={"value": 20, "reason": "Ajuste de politica de sessao"}, headers=headers)
+    assert sensitive.status_code == 200
+    approval_id = sensitive.json()["approval_id"]
+    self_approval = client.post(f"/api/v1/configuracoes/aprovacoes/{approval_id}/revisao", json={"decision": "aprovado", "reason": "Tentativa de autoaprovacao"}, headers=headers)
+    assert self_approval.status_code == 403
+
+    rule = client.post("/api/v1/monitoramento/regras", json={"name": "Falhas de login elevadas", "metric": "logins.failure", "operator": "gte", "threshold": 3, "severity": "critical", "window_seconds": 60}, headers=headers)
+    assert rule.status_code == 201
+    sample = client.post("/api/v1/monitoramento/metricas", json={"series": "logins.failure", "value": 3, "labels": {"profile": "operador"}}, headers=headers)
+    assert sample.status_code == 202
+    assert sample.json()["alerts_triggered"] == 1
+    alert = client.get("/api/v1/monitoramento/alertas", headers=headers).json()[0]
+    acknowledged = client.post(f"/api/v1/monitoramento/alertas/{alert['id']}/ack", headers=headers)
+    assert acknowledged.json()["state"] == "acknowledged"
+
+    monitoring = client.get("/api/v1/monitoramento/central?minutes=60", headers=headers)
+    assert monitoring.status_code == 200
+    assert monitoring.json()["event_chain_valid"] is True
+    assert monitoring.json()["series"]["logins.failure"][0]["value"] == 3
+    assert client.get("/metrics").status_code == 200
+
+
+def test_monitoring_websocket_requires_and_accepts_access_token(client):
+    token = access_token(client)
+    with client.websocket_connect(f"/api/v1/monitoramento/ws?token={token}&channel=saude") as socket:
+        message = socket.receive_json()
+        assert message["type"] == "connection"
+        assert message["status"] == "live"
+        assert message["channel"] == "saude"

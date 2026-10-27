@@ -143,3 +143,11 @@ PYTHONPATH=backend pytest -q backend/tests
 ```
 
 A cobertura ainda e inicial, abaixo do minimo solicitado. Nao use dados, credenciais ou armazenamento de demonstracao para tratar dados pessoais reais sem completar revisao de seguranca, LGPD, retencao, backups e controles de acesso.
+
+## Deploy no Render
+
+O Blueprint em `render.yaml` cria a API e um PostgreSQL gerenciado. O entrypoint da raiz (`main.py`) encaminha `uvicorn main:app` para `backend/app/main.py`; a string `postgres://`/`postgresql://` do Render e normalizada para Psycopg 3. O pre-deploy aplica Alembic e executa o seed; `/health` e o health check.
+
+Ao criar o Blueprint, configure os valores secretos solicitados pelo Render: `BANK_ENCRYPTION_KEY` (chave Fernet), `ADMIN_CPF`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `CORS_ORIGINS` com a origem HTTPS do frontend. `JWT_SECRET_KEY` e gerada pelo Blueprint. Use valores novos e fortes; nao reutilize credenciais de desenvolvimento. Redis e opcional nesse blueprint e, sem `REDIS_URL`, o monitoramento usa polling da persistencia SQL.
+
+Antes de promover para producao, valide uma copia restauravel do banco, configure dominios/origens, armazenamento privado de documentos e politicas de backup/retencao. O entrypoint suporta o comando padrao `uvicorn main:app --host 0.0.0.0 --port $PORT`.

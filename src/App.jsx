@@ -12,12 +12,14 @@ import {
 import './App.css';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import MonitoringDashboard from './components/MonitoringDashboard';
+import EnterpriseSettings from './components/EnterpriseSettings';
 import { useAuth } from './contexts/AuthContext';
 
 const pagePaths = {
   'Visão geral': '/dashboard', Segurados: '/segurados', Recenseamento: '/recenseamento',
   Documentos: '/documentos', Monitoramento: '/monitoramento', Relatórios: '/relatorios',
-  'Usuários e perfis': '/usuarios',
+  'Usuários e perfis': '/usuarios', Configurações: '/configuracoes',
 };
 
 const navigation = [
@@ -28,6 +30,7 @@ const navigation = [
   { label: 'Monitoramento', icon: Activity, group: 'CONTROLE' },
   { label: 'Relatórios', icon: FileClock },
   { label: 'Usuários e perfis', icon: ShieldCheck, group: 'SISTEMA' },
+  { label: 'Configurações', icon: Settings },
 ];
 
 const chartData = [
@@ -91,7 +94,7 @@ function DashboardApp() {
           <ChevronDown size={15} />
         </div>
         <nav className="side-navigation" aria-label="Navegação principal">
-          {navigation.map((item) => {
+          {navigation.filter((item) => item.label !== 'Configurações' || user?.profiles?.includes('super_administrador')).map((item) => {
             const Icon = item.icon;
             return <div key={item.label}>
               {item.group && <div className="nav-group-label">{item.group}</div>}
@@ -126,7 +129,7 @@ function DashboardApp() {
 
         <div className="page-content">
           <div className="demo-banner"><span className="demo-dot" /> AMBIENTE DE DEMONSTRAÇÃO <span>·</span> Dados ilustrativos, sem conexão com cadastro real.</div>
-          {activePage === 'Visão geral' ? <>
+          {activePage === 'Monitoramento' ? <MonitoringDashboard /> : activePage === 'Configurações' ? user?.profiles?.includes('super_administrador') ? <EnterpriseSettings /> : <div className="route-denied"><h1>Acesso não autorizado</h1><p>Esta área é exclusiva para Super Administradores.</p></div> : activePage === 'Visão geral' ? <>
             <section className="welcome-row">
               <div><div className="eyebrow"><CalendarDays size={14} /> {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date()).toUpperCase()}</div><h1>Olá, {user?.full_name?.split(' ')[0] || 'equipe'} <span>☀</span></h1><p>Aqui está o panorama da previdência municipal hoje.</p></div>
               <button className="primary-button" onClick={() => selectPage('Segurados')}><Plus size={17} /> Novo segurado</button>

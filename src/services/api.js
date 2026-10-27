@@ -12,6 +12,19 @@ export function setAccessToken(token) {
   accessToken = token;
 }
 
+export function getAccessToken() {
+  return accessToken;
+}
+
+export async function renewAccessToken() {
+  const refreshToken = sessionStorage.getItem('aurora.refresh');
+  if (!refreshToken) throw new Error('Sessao inexistente');
+  const { data } = await api.post('/auth/refresh', { refresh_token: refreshToken });
+  accessToken = data.access_token;
+  sessionStorage.setItem('aurora.refresh', data.refresh_token);
+  return data.access_token;
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;

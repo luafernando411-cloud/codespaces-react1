@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models import ActiveEmployee, AuditLog, Census, CensusCampaign, Document, DocumentType, Insured, Person, Pensioner, Retiree, User, UserSession
+from app.observability import append_business_event
 from app.repositories import InsuredRepository
 from app.schemas import InsuredCreate
 
@@ -19,6 +20,7 @@ class AuditService:
 
     def record(self, user_id: int | None, entity: str, entity_id: int | str, action: str, before=None, after=None) -> None:
         self.db.add(AuditLog(user_id=user_id, entidade=entity, entidade_id=str(entity_id), acao=action, dados_antes=before, dados_depois=after))
+        append_business_event(self.db, f"{entity}.{action}", entity, entity_id, user_id, {"before": before, "after": after})
 
 
 class InsuredService:

@@ -8,6 +8,7 @@ from app.models import DocumentType, Permission, Profile, ProfilePermission, Use
 
 PROFILE_DEFINITIONS = {
     "administrador": ("Administrador", "Acesso administrativo completo"),
+    "super_administrador": ("Super Administrador", "Governanca global e aprovacao de alteracoes sensiveis"),
     "operador": ("Operador/Atendente", "Cadastro, documentos e recenseamento"),
     "auditor": ("Auditor/Gestor", "Consulta, monitoramento e relatorios"),
     "segurado": ("Segurado", "Acesso a propria area, quando habilitada"),
@@ -67,6 +68,8 @@ def seed() -> None:
             db.flush()
         if not db.get(UserProfile, (admin.id, profiles["administrador"].id)):
             db.add(UserProfile(user_id=admin.id, profile_id=profiles["administrador"].id))
+        if not db.get(UserProfile, (admin.id, profiles["super_administrador"].id)):
+            db.add(UserProfile(user_id=admin.id, profile_id=profiles["super_administrador"].id))
         db.commit()
 
 
